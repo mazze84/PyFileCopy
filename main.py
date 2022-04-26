@@ -6,12 +6,15 @@ import os
 import argparse
 import logging
 
-from typing import List, Tuple
+from typing import List
+
 # Press Umschalt+F10 to execute it or replace it with your code.
 # Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
 
 BLOCKSIZE = 65536
-def hashFile(path):
+
+
+def hash_file(path):
     if os.path.isdir(path):
         return False
 
@@ -24,30 +27,34 @@ def hashFile(path):
     return hasher.hexdigest()
 
 
-def copyFile(source_file, destination_file):
+def copy_file(source_file, destination_file):
+    if not os.path.exists(destination_file):
+        os.makedirs(destination_file)
     shutil.copyfile(source_file, destination_file)
 
-def getFilesForPath(path_dir, extension_filter=""):
+
+def get_files_in_subfolders(path_dir, extension_filter=""):
     content_dir: List[str] = os.listdir(path_dir)
-    files_dir: List[Tuple] = []
+    files_dir: List[str] = []
     for filename in content_dir:
         path_file = os.sep.join([path_dir, filename])
         if os.path.isdir(path_file):
-            files_dir.extend(getFilesForPath(path_file, extension_filter))
+            files_dir.extend(get_files_in_subfolders(path_file, extension_filter))
         else:
             if extension_filter.strip():
                 file_extension = pathlib.Path(filename).suffix
-                if file_extension != extension_filter:
+                if file_extension.lower() != extension_filter.lower():
                     continue
-            files_dir.append((createRelPath(path_dir, path_file), path_file))
+            files_dir.append(path_file)
     return files_dir
 
-def createRelPath(source_dir, file_path):
-    print(os.path.relpath(file_path, source_dir))
-    return os.path.relpath(file_path, args['Source'])
+
+def get_relpath(file_path, source_dir):
+    logger.debug(os.path.relpath(file_path, source_dir))
+    return os.path.relpath(file_path, source_dir)
 
 
-def checkCopyFile(source_file, destination_file):
+def check_files(source_file, destination_file):
     if not os.path.isfile(source_file):
         logger.error(source_file + " is not a file")
         return False
@@ -55,20 +62,30 @@ def checkCopyFile(source_file, destination_file):
         logger.error(destination_file + " is not a file")
         return False
 
-    hash_source = hashFile(source_file)
+    hash_source = hash_file(source_file)
 
-    hash_dest = hashFile(destination_file)
+    hash_dest = hash_file(destination_file)
     logger.debug(hash_source + " " + hash_dest)
     return hash_source == hash_dest
 
-def checkFiles(source, destination):
+
+def check_source_destination(source, destination):
     if os.path.isfile(source) and os.path.isdir(destination):
-        if os.pathdir(source) != destination:
+        if os.path.realpath(source) != destination:
             return True
     return False
 
-def getDestinationFilePath(file_name, destination_dir):
+
+def get_destination(file_name, destination_dir):
     return os.sep.join([destination_dir, file_name])
+
+
+# check if move is true then delete
+def check_delete_file(file_dir, destination_file):
+    if args['Move'] is not None and check_files(file_dir, destination_file):
+        logger.info("removing file " + file_dir)
+        os.remove(file_dir)
+
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
@@ -100,23 +117,36 @@ if __name__ == '__main__':
 
     args = vars(all_args.parse_args())
 
-    if checkFiles(args['Source'], args['Destination']):
-        logger.error("Not a path")
-        exit(0)
+    source_dir = args['Source']
+    destination_dir = args['Destination']
 
     if args['Filter'] != None:
-        files_dir: List[Tuple] = getFilesForPath(args['Source'], args['Filter'])
+        files_dir: List[str] = get_files_in_subfolders(source_dir, args['Filter'])
     else:
-        files_dir: List[Tuple] = getFilesForPath(args['Source'])
-
-    destination = args['Destination']
+        files_dir: List[str] = get_files_in_subfolders(source_dir)
 
     for file in files_dir:
-        logger.debug(file[1])
-        destination_file = getDestinationFilePath(file[0], destination)
-        logger.debug(destination_file)
-        logger.info(checkCopyFile(file[1], destination_file))
-        pass
+        if not check_source_destination(file, destination_dir):
+            logger.error("Not a valid path")
+            continue
+        logger.debug(file)
+        destination_file = get_destination(get_relpath(file, source_dir), destination_dir)
+
+        if os.path.isfile(destination_file):
+            # file is not the same delete the destination file
+            if not check_files(file, destination_file):
+                logger.debug("deleting destination file " + destination_file)
+                os.remove(destination_file)
+            else:
+
+                check_delete_file(file, destination_file)
+                continue
+
+        logger.info("copying file " + file + " to " + destination_file)
+        copy_file(file, destination_file)
+        logger.debug(check_files(file, destination_file))
+
+        if args['Move'] is not None and check_files(file, destination_file):
+            check_delete_file(file)
 
 # See PyCharm help at https://www.jetbrains.com/help/pycharm/
-
