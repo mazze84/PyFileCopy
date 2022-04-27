@@ -39,6 +39,7 @@ def get_files_in_subfolders(path_dir, extension_filter=""):
     for filename in content_dir:
         path_file = os.sep.join([path_dir, filename])
         if os.path.isdir(path_file):
+            # TODO add switch not to search in subfolders
             files_dir.extend(get_files_in_subfolders(path_file, extension_filter))
         else:
             if extension_filter.strip():
@@ -87,6 +88,37 @@ def check_delete_file(file_dir, destination_file):
         os.remove(file_dir)
 
 
+def copy_files(source_dir, destination_dir, filter, move):
+    if filter != None:
+        files_dir: List[str] = get_files_in_subfolders(source_dir, filter)
+    else:
+        files_dir: List[str] = get_files_in_subfolders(source_dir)
+
+    for file in files_dir:
+        if not check_source_destination(file, destination_dir):
+            logger.error("Not a valid path")
+            continue
+        logger.debug(file)
+        destination_file = get_destination(get_relpath(file, source_dir), destination_dir)
+
+        if os.path.isfile(destination_file):
+            # TODO ask if file should be overridden
+            # file is not the same delete the destination file
+            if not check_files(file, destination_file):
+                logger.debug("deleting destination file " + destination_file)
+                os.remove(destination_file)
+            else:
+
+                check_delete_file(file, destination_file)
+                continue
+
+        logger.info("copying file " + file + " to " + destination_file)
+        copy_file(file, destination_file)
+
+        if move is not None and check_files(file, destination_file):
+            check_delete_file(file)
+
+
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     # create logger
@@ -117,36 +149,5 @@ if __name__ == '__main__':
 
     args = vars(all_args.parse_args())
 
-    source_dir = args['Source']
-    destination_dir = args['Destination']
+    copy_files(args['Source'], args['Destination'], args['Filter'], args['Move'])
 
-    if args['Filter'] != None:
-        files_dir: List[str] = get_files_in_subfolders(source_dir, args['Filter'])
-    else:
-        files_dir: List[str] = get_files_in_subfolders(source_dir)
-
-    for file in files_dir:
-        if not check_source_destination(file, destination_dir):
-            logger.error("Not a valid path")
-            continue
-        logger.debug(file)
-        destination_file = get_destination(get_relpath(file, source_dir), destination_dir)
-
-        if os.path.isfile(destination_file):
-            # file is not the same delete the destination file
-            if not check_files(file, destination_file):
-                logger.debug("deleting destination file " + destination_file)
-                os.remove(destination_file)
-            else:
-
-                check_delete_file(file, destination_file)
-                continue
-
-        logger.info("copying file " + file + " to " + destination_file)
-        copy_file(file, destination_file)
-        logger.debug(check_files(file, destination_file))
-
-        if args['Move'] is not None and check_files(file, destination_file):
-            check_delete_file(file)
-
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
