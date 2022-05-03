@@ -28,9 +28,17 @@ def hash_file(path):
 
 
 def copy_file(source_file, destination_file):
-    if not os.path.exists(destination_file):
-        os.makedirs(destination_file)
-    shutil.copyfile(source_file, destination_file)
+    if not os.path.exists(os.path.dirname(destination_file)):
+        os.makedirs(os.path.dirname(destination_file))
+    # TODO try catch block for reading or writing errors
+    try:
+        shutil.copyfile(source_file, destination_file)
+    except PermissionError:
+        logger.error("No permissions to copy file " + source_file + " to " + destination_file)
+        return False
+    else:
+        logger.info("File " + source_file + " copied to " + destination_file)
+        return True
 
 
 def get_files_in_subfolders(path_dir, extension_filter=""):
@@ -39,7 +47,7 @@ def get_files_in_subfolders(path_dir, extension_filter=""):
     for filename in content_dir:
         path_file = os.sep.join([path_dir, filename])
         if os.path.isdir(path_file):
-            # TODO add switch not to search in subfolders
+            # TODO add switch not to search recursive for subfolders
             files_dir.extend(get_files_in_subfolders(path_file, extension_filter))
         else:
             if extension_filter.strip():
@@ -66,7 +74,7 @@ def check_files(source_file, destination_file):
     hash_source = hash_file(source_file)
 
     hash_dest = hash_file(destination_file)
-    logger.debug(hash_source + " " + hash_dest)
+    logger.debug("Hashes source:" + hash_source + " destination:" + hash_dest)
     return hash_source == hash_dest
 
 
@@ -112,11 +120,11 @@ def copy_files(source_dir, destination_dir, filter, move):
                 check_delete_file(file, destination_file)
                 continue
 
-        logger.info("copying file " + file + " to " + destination_file)
+
         copy_file(file, destination_file)
 
         if move is not None and check_files(file, destination_file):
-            check_delete_file(file)
+            check_delete_file(file, destination_file)
 
 
 # Press the green button in the gutter to run the script.
